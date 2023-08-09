@@ -1,0 +1,16 @@
+cc_library_shared {
+    name: "gps.default",
+    vendor: true,
+    relative_install_path: "hw",
+    cflags: ["-DHAVE_GPS_HARDWARE"],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libhardware",
+        "libc",
+        "libutils",
+    ],
+
+    srcs: ["gps_zkw.c"],
+}
+
