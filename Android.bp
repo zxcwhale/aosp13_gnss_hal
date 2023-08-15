@@ -11,6 +11,6 @@ cc_library_shared {
         "libutils",
     ],
 
-    srcs: ["gps_zkw.c"],
+    srcs: ["gnss_zkw.c"],
 }
 

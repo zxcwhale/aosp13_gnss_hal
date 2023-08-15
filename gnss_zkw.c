@@ -26,7 +26,7 @@
 
 #define LOCATION_NLP_FIX "/data/misc/gps/LOCATION.DAT"
 #define C_INVALID_FD -1
-#define LOG_TAG  "gps_zkw"
+#define LOG_TAG  "gnss_zkw"
 #include <cutils/log.h>
 #include <cutils/sockets.h>
 #include <cutils/properties.h>
@@ -1232,7 +1232,7 @@ gps_state_thread(void*  arg)
 	}
 
         DBG("gps thread(v%d.%d) running: PPID[%d], PID[%d], EPOLL_FD[%d], GPSFD[%d]\n", MAJOR_NO, MINOR_NO, getppid(), getpid(), epoll_fd, gps_fd);
-        DBG("HAL thread is ready, realease lock, and CMD_START can be handled\n");
+        DBG("HAL thread is ready, release lock, and CMD_START can be handled\n");
         //  now loop
         for (;;) {
                 struct epoll_event   events[4];
