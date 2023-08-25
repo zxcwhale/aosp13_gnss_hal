@@ -12,10 +12,9 @@
 1. GNSS_STR 
 - 0，使用GpsSvStatus结构体和sv_status_cb回调上报卫星状态。
 - 1，使用GnssSvStatus结构体和gnss_sv_status_cb回调上报卫星状态。
-2. TTY_BOOST
+2. TTY_BOOST *建议关闭该功能*
 - 0, 不使用该功能
 - 1, 波特率等于9600时，自动调整波特率到115200。(可能会出错，慎用)
-* 建议关闭该功能 *
 3. REDUCE_SV_FREQ
 - 0, 关闭该功能
 - 1, 在gps_state_start()时，减小卫星语句的输出频率. 
@@ -44,8 +43,7 @@ adb reboot
 
 1. 如果编译出现找不到`ALOGD`, `ALOGE`的报错, 可以尝试将`ALOGD`改为`LOGD`, `ALOGE`改为`LOGE`.
 
-2. 使用Gnss1.0接口
-修改device.mk,添加如下内容
+2. 使用Gnss1.0接口,修改device.mk,添加如下内容
 ```
 # Gnss HAL
 PRODUCT_PACKAGES += \
@@ -54,8 +52,7 @@ PRODUCT_PACKAGES += \
 	android.hardware.gnss@1.0-service
 ```
 
-3. 使用Gnss2.0接口
-修改device.mk,添加如下内容
+3. 使用Gnss2.0接口,修改device.mk,添加如下内容
 ```
 # Gnss HAL
 PRODUCT_PACKAGES += \
