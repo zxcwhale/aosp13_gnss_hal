@@ -713,11 +713,9 @@ nmea_reader_update_sv_status_gnss(NmeaReader* r, int sv_type, int prn, Token ele
                 ERR("ERR: sv_index=[%d] is larger than GPS_MAX_SVS.\n", sv_index);
                 return 1;
         }
-        if (sv_type == GNSS_CONSTELLATION_GLONASS && prn > SVID_PLUS_GLONASS)
-                prn -= SVID_PLUS_GLONASS;
 
         r->sv_status_gps.sv_list[sv_index].size = sizeof(GpsSvInfo);
-        r->sv_status_gps.sv_list[sv_index].prn = prn;
+        r->sv_status_gps.sv_list[sv_index].prn = prn2svid(prn, sv_type);
         r->sv_status_gps.sv_list[sv_index].snr = str2float(snr.p, snr.end);
         r->sv_status_gps.sv_list[sv_index].elevation = str2int(elevation.p, elevation.end);
         r->sv_status_gps.sv_list[sv_index].azimuth = str2int(azimuth.p, azimuth.end);
