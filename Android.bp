@@ -12,5 +12,6 @@ cc_library_shared {
     ],
 
     srcs: ["gnss_zkw.c"],
+    //srcs: ["gps_zkw2.c"],
 }
 

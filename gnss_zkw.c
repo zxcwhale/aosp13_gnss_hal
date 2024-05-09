@@ -34,10 +34,21 @@
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <sys/_system_properties.h>
 #endif
+
+#define GPS_SV		0
+#define GNSS_SV		1
+#define MTK_GNSS_EXT 	2
+
+#define SV_STR_TYPE	GNSS_SV	// 0 - GpsSvStatus, 1 - GnssSvStatus, 2 - MTK GnssSvStatus_ext
+
+#if SV_STR_TYPE == MTK_GNSS_EXT
+#include <hardware/gps_mtk.h>
+#else
 #include <hardware/gps.h>
+#endif
 
 #define MAJOR_NO	13
-#define MINOR_NO	3
+#define MINOR_NO	10
 #define UNUSED(x) (void)(x)
 #define MEASUREMENT_SUPPLY      0
 /* the name of the controlled socket */
@@ -45,7 +56,6 @@
 //#define TTY_BAUD                B9600
 #define TTY_BAUD                B115200
 
-#define GNSS_STR	0
 #define REDUCE_SV_FREQ		0	// 0 - OFF, 1 - When gps_state_start(), 2 - When tty payload is high.
 #define TTY_BOOST		0
 
@@ -282,10 +292,12 @@ typedef struct {
          * (2) GPS_STATUS_SESSION_END:   receive location fix + flag set + callback is null
          */
         int             cb_status_changed;
-#if GNSS_STR
-        GnssSvStatus    sv_status_gnss;
-#else
+#if SV_STR_TYPE == GPS_SV
         GpsSvStatus     sv_status_gps;
+#elif SV_STR_TYPE == GNSS_SV
+        GnssSvStatus    sv_status_gnss;
+#elif SV_STR_TYPE == MTK_GNSS_EXT
+	GnssSvStatus_ext sv_status_mtk;
 #endif
         GpsCallbacks    callbacks;
         GnssData        gnss_data;
@@ -337,10 +349,12 @@ nmea_reader_init(NmeaReader* const r)
         r->fix_mode = 0;    /*no fix*/
         r->cb_status_changed = 0;
         r->hdop = 99.0;
-#if GNSS_STR
+#if SV_STR_TYPE == GNSS_SV
         memset((void*)&r->sv_status_gnss, 0x00, sizeof(r->sv_status_gnss));
-#else
+#elif SV_STR_TYPE == GPS_SV
         memset((void*)&r->sv_status_gps, 0x00, sizeof(r->sv_status_gps));
+#elif SV_STR_TYPE == MTK_GNSS_EXT
+        memset((void*)&r->sv_status_mtk, 0x00, sizeof(r->sv_status_mtk));
 #endif
         memset((void*)&r->in, 0x00, sizeof(r->in));
 
@@ -356,10 +370,12 @@ nmea_reader_set_callback(NmeaReader* const r, GpsCallbacks* const cbs)
                 return;
         } else {/*register the callback*/
                 r->fix.flags = 0;
-#if GNSS_STR
+#if SV_STR_TYPE == GNSS_SV
                 r->sv_status_gnss.num_svs = 0;
-#else
+#elif SV_STR_TYPE == GPS_SV
                 r->sv_status_gps.num_svs = 0;
+#elif SV_STR_TYPE == MTK_GNSS_EXT
+                r->sv_status_mtk.num_svs = 0;
 #endif
         }
 }
@@ -684,7 +700,7 @@ static int
 nmea_reader_update_sv_status_gnss(NmeaReader* r, int sv_type, int prn, Token elevation, Token azimuth, Token snr)
 {
 
-#if GNSS_STR
+#if SV_STR_TYPE == GNSS_SV
         int sv_index = r->sv_status_gnss.num_svs;
         if (GNSS_MAX_SVS <= sv_index) {
                 ERR("ERR: sv_index=[%d] is larger than GNSS_MAX_SVS.\n", sv_index);
@@ -707,7 +723,7 @@ nmea_reader_update_sv_status_gnss(NmeaReader* r, int sv_type, int prn, Token ele
         DBG("Update GNSS_SV: prn=%d typ=%d use=%d\n", prn, sv_type, r->sv_used_in_fix[prn2svid(prn, sv_type)]);
 
         r->sv_status_gnss.num_svs++;
-#else
+#elif SV_STR_TYPE == GPS_SV
         int sv_index = r->sv_status_gps.num_svs;
         if (GPS_MAX_SVS <= sv_index) {
                 ERR("ERR: sv_index=[%d] is larger than GPS_MAX_SVS.\n", sv_index);
@@ -726,6 +742,30 @@ nmea_reader_update_sv_status_gnss(NmeaReader* r, int sv_type, int prn, Token ele
 
         r->sv_status_gps.num_svs++;
 
+#elif SV_STR_TYPE == MTK_GNSS_EXT
+        int sv_index = r->sv_status_mtk.num_svs;
+        if (MTK_MAX_SV_COUNT <= sv_index) {
+                ERR("ERR: sv_index=[%d] is larger than MTK_MAX_SV_COUNT.\n", sv_index);
+                return 1;
+        }
+        if (sv_type == GNSS_CONSTELLATION_GLONASS && prn > SVID_PLUS_GLONASS)
+                prn -= SVID_PLUS_GLONASS;
+
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.size = sizeof(GnssSvInfo);
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.svid = prn;
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.constellation = sv_type;
+
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.c_n0_dbhz = str2float(snr.p, snr.end);
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.elevation = str2int(elevation.p, elevation.end);
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.azimuth = str2int(azimuth.p, azimuth.end);
+        r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.flags = 0;
+        if (r->sv_used_in_fix[prn2svid(prn, sv_type)])
+                r->sv_status_mtk.gnss_sv_list[sv_index].legacySvInfo.flags |= GNSS_SV_FLAGS_USED_IN_FIX;
+        r->sv_status_mtk.gnss_sv_list[sv_index].carrier_frequency = 1111*1e6F;
+
+        DBG("Update MTK_SV: prn=%d typ=%d use=%d\n", prn, sv_type, r->sv_used_in_fix[prn2svid(prn, sv_type)]);
+
+        r->sv_status_mtk.num_svs++;
 #endif
         return 0;
 }
@@ -945,7 +985,7 @@ nmea_reader_parse(NmeaReader* const r)
                 char*  end = p + sizeof(temp);
                 struct tm   utc;
 
-                p += snprintf(p, end-p, "sending fix");
+                p += snprintf(p, end-p, "sending fix[%02X]", r->fix.flags);
                 if (r->fix.flags & GPS_LOCATION_HAS_LAT_LONG) {
                         p += snprintf(p, end-p, " lat=%g lon=%g", r->fix.latitude, r->fix.longitude);
                 }
@@ -964,7 +1004,7 @@ nmea_reader_parse(NmeaReader* const r)
                 }
                 gmtime_r((time_t*) &r->fix.timestamp, &utc);
                 p += snprintf(p, end-p, " time=%s", asctime(&utc));
-                VER("%s", temp);
+                DBG("%s", temp);
 #endif
 
                 callback_backup.location_cb(&r->fix);
@@ -975,7 +1015,7 @@ nmea_reader_parse(NmeaReader* const r)
 	
         DBG("gps_nmea_end_tag = %d, sv_status_can_report = %d", gps_nmea_end_tag, r->sv_status_can_report);
         if (r->sv_status_can_report) {
-#if GNSS_STR
+#if SV_STR_TYPE == GNSS_SV
                 if (r->sv_status_gnss.num_svs > 0) {
                         DBG("Report gnss_sv_status, num = %d, cb=%p.", r->sv_status_gnss.num_svs, callback_backup.gnss_sv_status_cb);
                         r->sv_status_gnss.size = sizeof(GnssSvStatus);
@@ -983,13 +1023,21 @@ nmea_reader_parse(NmeaReader* const r)
                         memset(r->sv_used_in_fix, 0, sizeof(r->sv_used_in_fix));
                         memset(&r->sv_status_gnss, 0, sizeof(r->sv_status_gnss));
                 }
-#else
+#elif SV_STR_TYPE == GPS_SV
                 if (r->sv_status_gps.num_svs > 0) {
                         DBG("Report gps_sv_status, num = %d, cb=%p.", r->sv_status_gps.num_svs, callback_backup.gnss_sv_status_cb);
                         r->sv_status_gps.size = sizeof(GpsSvStatus);
                         callback_backup.sv_status_cb(&r->sv_status_gps);
                         memset(r->sv_used_in_fix, 0, sizeof(r->sv_used_in_fix));
                         memset(&r->sv_status_gps, 0, sizeof(r->sv_status_gps));
+                }
+#elif SV_STR_TYPE == MTK_GNSS_EXT
+                if (r->sv_status_mtk.num_svs > 0) {
+                        DBG("Report mtk_sv_status, num = %d, cb=%p.", r->sv_status_mtk.num_svs, callback_backup.gnss_sv_status_cb);
+                        r->sv_status_mtk.size = sizeof(GnssSvStatus_ext);
+                        ((gnss_sv_status_ext_callback)callback_backup.gnss_sv_status_cb)(&r->sv_status_mtk);
+                        memset(r->sv_used_in_fix, 0, sizeof(r->sv_used_in_fix));
+                        memset(&r->sv_status_mtk, 0, sizeof(r->sv_status_mtk));
                 }
 #endif
 
@@ -1062,6 +1110,91 @@ auto_reduce_sv_freq2(const NmeaReader *r)
                 if (++rmc_counter % 2 == 0)
                         nbytes = 0;
 }
+
+
+#define CASBIN_HEADER   "\xBA\xCE"
+#define MAX_CASBIN_SIZE 2048
+
+struct casbin_reader {
+        union {
+                unsigned char in[MAX_CASBIN_SIZE + 10];
+                struct {
+                        unsigned char header[2];
+                        unsigned short length;
+                        unsigned char cls_id;
+                        unsigned char sub_id;
+                        unsigned char payload[MAX_CASBIN_SIZE];
+
+                } msg;
+
+        };
+        int pos;
+        int reset_flag;
+};
+
+static void casbin_reader_reset(struct casbin_reader *r)
+{
+        memset(r, 0, sizeof(*r));
+}
+
+static int casbin_reader_checksum(struct casbin_reader *r)
+{
+        unsigned int chk = 0;
+        memcpy(&chk, r->in + 6 + r->msg.length, 4);
+
+        unsigned int sum = (r->msg.sub_id << 24) + (r->msg.cls_id << 16) + r->msg.length;
+        unsigned int *p = (unsigned int *)r->msg.payload;
+        int i = 0;
+        for (i = 0; i < r->msg.length / 4; i++)
+                sum += p[i];
+
+        return chk == sum;
+}
+
+
+static int casbin_reader_addc(struct casbin_reader *r, unsigned char c)
+{
+        if (r->reset_flag) 
+                casbin_reader_reset(r);
+
+        if (c == 0xBA && memcpy(r->in, CASBIN_HEADER, 2) != 0) 
+                casbin_reader_reset(r);
+
+        r->in[r->pos] = c;
+        r->pos = (r->pos + 1) % MAX_CASBIN_SIZE;
+
+        if (r->pos >= 4 && memcmp(r->in, CASBIN_HEADER, 2) == 0) {
+                if (r->msg.length > MAX_CASBIN_SIZE) {
+                        r->reset_flag = 1;
+                        return 0;
+                }
+
+                if (r->msg.length + 10 == r->pos) {
+                        r->reset_flag = 1;
+                        if (casbin_reader_checksum(r))
+                                return 1;
+                }
+        }
+
+        return 0;
+}
+
+static void casbin_reader_report(struct casbin_reader *r, long long timestamp)
+{
+	static char s[MAX_CASBIN_SIZE * 3];
+	static char tmp[4];
+	int k = 0;
+
+	memset(s, 0, sizeof(s));
+	for (k = 0; k < r->pos; k++) {
+		sprintf(tmp, "%02X ", r->in[k]);
+		memcpy(s + k * 3, tmp, 3);
+	}
+
+	DBG("report casbin(%dbytes) string by nmea_cb: %.s\n", k, s);
+	callback_backup.nmea_cb(timestamp, s, k * 3);
+}
+
 
 static void
 nmea_reader_addc(NmeaReader* const r, int  c)
@@ -1249,12 +1382,14 @@ gps_state_thread(void*  arg)
         GpsState*   state = (GpsState*) arg;
         //   state->thread_exit_flag=0;
         NmeaReader  reader[1];
+	struct casbin_reader c_reader;
         int         gps_fd     = state->fd;
         int         control_fd = state->control[1];
 
         int epoll_fd = state->epoll_fd;
 
         nmea_reader_init(reader);
+	casbin_reader_reset(&c_reader);
 
         if (control_fd < 0 || gps_fd < 0) {
                 ERR("control_fd = %d, gps_fd = %d", control_fd, gps_fd);
@@ -1354,7 +1489,9 @@ gps_state_thread(void*  arg)
                                                                 gps_nmea_end_tag = 1;
 
                                                         nmea_reader_addc(reader, buff[nn]);
-                                                }
+							if (casbin_reader_addc(&c_reader, buff[nn]))
+								casbin_reader_report(&c_reader, reader->fix.timestamp); 
+						}
                                         }
 
                                         VER("gps fd event end");
@@ -1640,7 +1777,7 @@ static int open_gps(const struct hw_module_t* module, char const* name,
                 dev->common.version = 0;
                 dev->common.module = (struct hw_module_t*)module;
                 //   dev->common.close = (int (*)(struct hw_device_t*))close_lights;
-                DBG("open_gps HAL 2, GNSS_STR=%d\n", GNSS_STR);
+                DBG("open_gps HAL 2, SV_STR_TYPE=%u\n", SV_STR_TYPE);
                 dev->get_gps_interface = gps__get_gps_interface;
                 DBG("open_gps HAL 3\n");
                 *device = (struct hw_device_t*)dev;
