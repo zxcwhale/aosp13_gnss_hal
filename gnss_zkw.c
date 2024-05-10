@@ -58,6 +58,7 @@
 
 #define REDUCE_SV_FREQ		0	// 0 - OFF, 1 - When gps_state_start(), 2 - When tty payload is high.
 #define TTY_BOOST		0
+#define SEND_COMMAND            0
 
 #define SVID_PLUS_GLONASS       64
 #define SVID_PLUS_GALILEO       100
@@ -1374,19 +1375,25 @@ epoll_deregister(int  epoll_fd, int  fd)
 }
 */
  
+#if SEND_COMMAND
 void
 send_command(int fd)
 {
-        DBG("Send commands");
+        DBG("Send command");
+        char msg[] = "init command";
+        /*
         char msg[] = {
                 0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01,
                 0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x00,0x01,0x00,0x18,0x00,0x07,0x01
                 };
+        */
 
         write(fd, msg, sizeof(msg));
 
         usleep(1000);
 }
+#endif
+
 /*for reducing the function call to get data from kernel*/
 static char buff[2048];
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
@@ -1427,7 +1434,11 @@ gps_state_thread(void*  arg)
 
         DBG("gps thread(v%d.%d) running: PPID[%d], PID[%d], EPOLL_FD[%d], GPSFD[%d]\n", MAJOR_NO, MINOR_NO, getppid(), getpid(), epoll_fd, gps_fd);
         DBG("HAL thread is ready, release lock, and CMD_START can be handled\n");
+
+#if SEND_COMMAND
         send_command(gps_fd);
+#endif
+
         //  now loop
         for (;;) {
                 struct epoll_event   events[4];
