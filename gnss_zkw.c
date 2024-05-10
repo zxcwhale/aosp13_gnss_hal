@@ -264,8 +264,8 @@ struct svinfo_raw {
 */
 
 #define HAS_CARRIER_FREQUENCY(p)        ((p) >= '1' && (p) <= '9')
-#define MAX_GNSS_SVID   320
-#define  NMEA_MAX_SIZE  256
+#define MAX_GNSS_SVID  320
+#define NMEA_MAX_SIZE  512
 /*maximum number of SV information in GPGSV*/
 #define  NMEA_MAX_SV_INFO 4
 #define  LOC_FIXED(pNmeaReader) ((pNmeaReader->fix_mode == 2) || (pNmeaReader->fix_mode ==3))
@@ -418,12 +418,17 @@ nmea_reader_update_time(NmeaReader* const r, Token  tok)
         if (mktime(&tm) == (time_t)-1)
                 ERR("mktime error: %d %s\n", errno, strerror(errno));
 
+        nmea_reader_update_utc_diff(r);
         fix_time = mktime(&tm);
         localtime_r(&fix_time, &tm_local);
 
         // fix_time += tm_local.tm_gmtoff;
         // DBG("fix_time: %d\n", (int)fix_time);
-        r->fix.timestamp = (long long)fix_time * 1000;
+
+        //r->fix.timestamp = (long long)fix_time * 1000;
+        unsigned long timestamp = (unsigned long)(fix_time - r->utc_diff)+ (seconds - tm.tm_sec);
+        r->fix.timestamp = (long long)timestamp * 1000;
+        DBG("fix_timestamp: %d\n", (int)timestamp);
         return 0;
 }
 
@@ -1368,7 +1373,20 @@ epoll_deregister(int  epoll_fd, int  fd)
         return ret;
 }
 */
+ 
+void
+send_command(int fd)
+{
+        DBG("Send commands");
+        char msg[] = {
+                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01,
+                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x00,0x01,0x00,0x18,0x00,0x07,0x01
+                };
 
+        write(fd, msg, sizeof(msg));
+
+        usleep(1000);
+}
 /*for reducing the function call to get data from kernel*/
 static char buff[2048];
 /* this is the main thread, it waits for commands from gps_state_start/stop and,
@@ -1409,6 +1427,7 @@ gps_state_thread(void*  arg)
 
         DBG("gps thread(v%d.%d) running: PPID[%d], PID[%d], EPOLL_FD[%d], GPSFD[%d]\n", MAJOR_NO, MINOR_NO, getppid(), getpid(), epoll_fd, gps_fd);
         DBG("HAL thread is ready, release lock, and CMD_START can be handled\n");
+        send_command(gps_fd);
         //  now loop
         for (;;) {
                 struct epoll_event   events[4];
@@ -1507,6 +1526,8 @@ Exit:
 }
 
 
+static GnssSystemInfo si;
+
 static void
 gps_state_init(GpsState*  state)
 {
@@ -1550,6 +1571,11 @@ gps_state_init(GpsState*  state)
 
         DBG("gps state initialized, the thread is %d", (int)state->thread);
         DBG("TTY_BOOST=%d, REDUCE_SV_FREQ=%d.", TTY_BAUD, REDUCE_SV_FREQ);
+
+        // Make GetGnssHardwareModelName available
+        si.size = sizeof(si);
+        si.year_of_hw = 2024;
+        callback_backup.set_system_info_cb(&si);
 
         return;
 
