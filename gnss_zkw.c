@@ -39,7 +39,7 @@
 #define GNSS_SV		1
 #define MTK_GNSS_EXT 	2
 
-#define SV_STR_TYPE	GNSS_SV	// 0 - GpsSvStatus, 1 - GnssSvStatus, 2 - MTK GnssSvStatus_ext
+#define SV_STR_TYPE	GPS_SV	// 0 - GpsSvStatus, 1 - GnssSvStatus, 2 - MTK GnssSvStatus_ext
 
 #if SV_STR_TYPE == MTK_GNSS_EXT
 #include <hardware/gps_mtk.h>
@@ -48,11 +48,11 @@
 #endif
 
 #define MAJOR_NO	13
-#define MINOR_NO	10
+#define MINOR_NO	11
 #define UNUSED(x) (void)(x)
 #define MEASUREMENT_SUPPLY      0
 /* the name of the controlled socket */
-#define GPS_CHANNEL_NAME        "/dev/ttyAMA3"
+#define GPS_CHANNEL_NAME        "/dev/ttyS2" //"/dev/ttyAMA3"
 //#define TTY_BAUD                B9600
 #define TTY_BAUD                B115200
 
@@ -1197,7 +1197,7 @@ static void casbin_reader_report(struct casbin_reader *r, long long timestamp)
 		memcpy(s + k * 3, tmp, 3);
 	}
 
-	DBG("report casbin(%dbytes) string by nmea_cb: %.s\n", k, s);
+	DBG("report casbin(%dbytes) string by nmea_cb: %s\n", k, s);
 	callback_backup.nmea_cb(timestamp, s, k * 3);
 }
 
@@ -1216,6 +1216,9 @@ nmea_reader_addc(NmeaReader* const r, int  c)
                 DBG("nmea sentence overflow\n");
                 return;
         }
+
+        if (c == '$')
+                r->pos = 0;
 
         r->in[r->pos] = (char)c;
         r->pos       += 1;
@@ -1380,13 +1383,11 @@ void
 send_command(int fd)
 {
         DBG("Send command");
-        char msg[] = "init command";
-        /*
+        //char msg[] = "init command";
         char msg[] = {
                 0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01,
                 0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x00,0x01,0x00,0x18,0x00,0x07,0x01
                 };
-        */
 
         write(fd, msg, sizeof(msg));
 
