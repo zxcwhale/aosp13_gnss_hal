@@ -39,7 +39,7 @@
 #define GNSS_SV		1
 #define MTK_GNSS_EXT 	2
 
-#define SV_STR_TYPE	GPS_SV	// 0 - GpsSvStatus, 1 - GnssSvStatus, 2 - MTK GnssSvStatus_ext
+#define SV_STR_TYPE	GNSS_SV	// 0 - GpsSvStatus, 1 - GnssSvStatus, 2 - MTK GnssSvStatus_ext
 
 #if SV_STR_TYPE == MTK_GNSS_EXT
 #include <hardware/gps_mtk.h>
@@ -48,7 +48,7 @@
 #endif
 
 #define MAJOR_NO	13
-#define MINOR_NO	11
+#define MINOR_NO	12
 #define UNUSED(x) (void)(x)
 #define MEASUREMENT_SUPPLY      0
 /* the name of the controlled socket */
@@ -815,13 +815,13 @@ nmea_reader_parse(NmeaReader* const r)
         }
 
         //  ignore first two characters.
-        if (!memcmp(tok.p, "BD", 2)) {
+        if (memcmp(tok.p, "BD", 2) == 0 || memcmp(tok.p, "GB", 2) == 0) {
                 sv_type = GNSS_CONSTELLATION_BEIDOU;
                 DBG("BDS SV type");
-        } else if (!memcmp(tok.p, "GL", 2)) {
+        } else if (memcmp(tok.p, "GL", 2) == 0) {
                 sv_type = GNSS_CONSTELLATION_GLONASS;
                 DBG("GLN SV type");
-        } else if (!memcmp(tok.p, "GA", 2)) {
+        } else if (memcmp(tok.p, "GA", 2) == 0) {
                 sv_type = GNSS_CONSTELLATION_GALILEO;
                 DBG("GAL SV type");
         }
@@ -948,7 +948,11 @@ nmea_reader_parse(NmeaReader* const r)
                         sv_arr[idx].svid = prn;
                         sv_arr[idx].constellation = sv_type;
                         */
-                        nmea_reader_update_sv_status_gnss(r, sv_type, prn, tok_ele, tok_azi, tok_snr);
+
+                        //if (sv_type == GNSS_CONSTELLATION_GPS && prn >= 191 && prn <= 199)
+                        //        sv_type = GNSS_CONSTELLATION_QZSS;
+                        if (prn < 190 || prn > 200)
+                                nmea_reader_update_sv_status_gnss(r, sv_type, prn, tok_ele, tok_azi, tok_snr);
                         if (HAS_CARRIER_FREQUENCY(tok_frq.p[0]))
                                 nmea_reader_update_gnss_measurement(r, sv_type, prn, tok_frq);
                 }
@@ -1383,13 +1387,19 @@ void
 send_command(int fd)
 {
         DBG("Send command");
-        //char msg[] = "init command";
-        char msg[] = {
-                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01,
-                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x00,0x01,0x00,0x18,0x00,0x07,0x01
-                };
+        /*
+        char txtmsg[] = "$PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*02\r\n";
+        write(fd, txtmsg, strlen(txtmsg));
+        */
 
-        write(fd, msg, sizeof(msg));
+        
+        char binmsg[] = {
+                //0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01, //1hz
+                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x0A,0x00,0x18,0x01,0x10,0x01,  // 5hz
+                0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x00,0x01,0x00,0x18,0x00,0x07,0x01,
+                0xBA,0xCE,0x08,0x00,0x06,0x12,0x02,0x05,0x02,0x01,0x03,0x00,0x77,0x9A,0x0D,0x05,0x7F,0xAD         
+                };
+        write(fd, binmsg, sizeof(binmsg));
 
         usleep(1000);
 }
