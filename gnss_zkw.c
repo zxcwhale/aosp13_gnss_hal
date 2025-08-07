@@ -48,7 +48,7 @@
 #endif
 
 #define MAJOR_NO	13
-#define MINOR_NO	12
+#define MINOR_NO	13
 #define UNUSED(x) (void)(x)
 #define MEASUREMENT_SUPPLY      0
 /* the name of the controlled socket */
@@ -58,7 +58,7 @@
 
 #define REDUCE_SV_FREQ		0	// 0 - OFF, 1 - When gps_state_start(), 2 - When tty payload is high.
 #define TTY_BOOST		0
-#define SEND_COMMAND            0
+#define SEND_COMMAND            1
 
 #define SVID_PLUS_GLONASS       64
 #define SVID_PLUS_GALILEO       100
@@ -1242,11 +1242,11 @@ nmea_reader_addc(NmeaReader* const r, int  c)
 static void
 gps_state_done(GpsState*  s)
 {
-        char   cmd = CMD_QUIT;
-        void *dummy;
+        // char   cmd = CMD_QUIT;
+        // void *dummy;
 
-        write(s->control[0], &cmd, 1);
-        pthread_join(s->thread, &dummy);
+        // write(s->control[0], &cmd, 1);
+        // pthread_join(s->thread, &dummy);
 
 
         close(s->control[0]);
@@ -1393,6 +1393,7 @@ send_command(int fd)
         */
 
         
+        /*
         char binmsg[] = {
                 //0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x32,0x00,0x18,0x01,0x38,0x01, //1hz
                 0xba,0xce,0x04,0x00,0x06,0x01,0x14,0x01,0x0A,0x00,0x18,0x01,0x10,0x01,  // 5hz
@@ -1400,8 +1401,15 @@ send_command(int fd)
                 0xBA,0xCE,0x08,0x00,0x06,0x12,0x02,0x05,0x02,0x01,0x03,0x00,0x77,0x9A,0x0D,0x05,0x7F,0xAD         
                 };
         write(fd, binmsg, sizeof(binmsg));
+        */
 
-        usleep(1000);
+        char msg[] = "$PCAS03,1,1,1,1,1,1,1,1,,,,,,*02\r\n"
+                "$PCAS11,0,21*32\r\n"
+                "\xBA\xCE\x08\x00\x06\x12\x02\x05\x02\x01\x03\x00\x77\x9A\x0D\x05\x7F\xAD"
+                "$PCAS00*01\r\n";
+        write(fd, msg, sizeof(msg));
+
+        usleep(5000);
 }
 #endif
 
@@ -1642,17 +1650,16 @@ zkw_gps_cleanup(void)
 {
         GpsState*  s = _gps_state;
 
-        char cmd = CMD_STOP;
+        char cmd = CMD_QUIT;
         int ret;
 
         do {
                 ret = write(s->control[0], &cmd, 1);
         } while(ret < 0 && errno == EINTR);
 
-        /*
+        usleep(50 * 1000);
         if (s->init)
                 gps_state_done(s);
-        */
         DBG("zkw_gps_cleanup done");
         //     return NULL;
 }
