@@ -58,7 +58,7 @@
 
 #define REDUCE_SV_FREQ		0	// 0 - OFF, 1 - When gps_state_start(), 2 - When tty payload is high.
 #define TTY_BOOST		0
-#define SEND_COMMAND            1
+#define SEND_COMMAND            0
 
 #define SVID_PLUS_GLONASS       64
 #define SVID_PLUS_GALILEO       100
